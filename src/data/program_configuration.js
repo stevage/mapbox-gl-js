@@ -124,8 +124,7 @@ class ConstantBinder<T> implements Binder<T> {
                 currentValue: PossiblyEvaluatedPropertyValue<T>) {
         const value: any = currentValue.constantOr(this.value);
         const gl = context.gl;
-        for (let i = 0; i < this.names.length; i++) {
-            const name = this.names[i];
+        for (const name of this.names) {
             if (this.type === 'color') {
                 gl.uniform4f(program.uniforms[`u_${name}`], value.r, value.g, value.b, value.a);
             } else {
@@ -503,12 +502,6 @@ class CrossFadedCompositeBinder<T> implements Binder<T> {
         }
     }
 
-    getVertexBuffer(crossfade: CrossfadeParameters) {
-        if (this.zoomOutPaintVertexBuffer && this.zoomInPaintVertexBuffer) {
-            return crossfade.fromScale === 2 ? this.zoomInPaintVertexBuffer : this.zoomOutPaintVertexBuffer;
-        }
-    }
-
     upload(context: Context) {
         if (this.zoomInPaintVertexArray && this.zoomOutPaintVertexArray) {
             this.zoomInPaintVertexBuffer = context.createVertexBuffer(this.zoomInPaintVertexArray, this.paintVertexAttributes, this.expression.isStateDependent);
@@ -603,10 +596,13 @@ export default class ProgramConfiguration {
             if (!(value instanceof PossiblyEvaluatedPropertyValue) || !supportsPropertyExpression(value.property.specification)) {
                 continue;
             }
-            const names = paintAttributeName(property, layer.type);
+            const names = paintAttributeNames(property, layer.type);
             const type = value.property.specification.type;
             const useIntegerZoom = value.property.useIntegerZoom;
-            if (value.property.binder === 'cross-faded') {
+            const isCrossFaded = value.property.specification['property-type'] === 'cross-faded' ||
+                                 value.property.specification['property-type'] === 'cross-faded-data-driven';
+
+            if (isCrossFaded) {
                 if (value.value.kind === 'constant') {
                     self.binders[property] = new CrossFadedConstantBinder(value.value, names, type);
                     keys.push(`/u_${property}`);
@@ -637,11 +633,7 @@ export default class ProgramConfiguration {
     populatePaintArrays(newLength: number, feature: Feature, index: number, imagePositions: {[string]: ImagePosition}) {
         for (const property in this.binders) {
             const binder = this.binders[property];
-            if (binder instanceof CrossFadedCompositeBinder) {
-                binder.populatePaintArray(newLength, feature, imagePositions);
-            } else {
-                binder.populatePaintArray(newLength, feature, {});
-            }
+            binder.populatePaintArray(newLength, feature, imagePositions);
         }
         if (feature.id) {
             const featureId = String(feature.id);
@@ -714,7 +706,7 @@ export default class ProgramConfiguration {
         for (const property in this.binders) {
             const binder = this.binders[property];
             if (binder instanceof CrossFadedCompositeBinder) {
-                const patternVertexBuffer = binder.getVertexBuffer(crossfade);
+                const patternVertexBuffer = crossfade.fromScale === 2 ? binder.zoomInPaintVertexBuffer : binder.zoomOutPaintVertexBuffer;
                 if (patternVertexBuffer) buffers.push(patternVertexBuffer);
             } else if ((binder instanceof SourceExpressionBinder ||
                 binder instanceof CompositeExpressionBinder) &&
@@ -797,7 +789,7 @@ export class ProgramConfigurationSet<Layer: TypedStyleLayer> {
     }
 }
 
-function paintAttributeName(property, type) {
+function paintAttributeNames(property, type) {
     const attributeNameExceptions = {
         'text-opacity': ['opacity'],
         'icon-opacity': ['opacity'],

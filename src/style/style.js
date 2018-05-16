@@ -758,7 +758,7 @@ class Style extends Evented {
         // so a call to _updateLayer is necessary
 
         const prop = layer.paint && layer.paint.get(name);
-        const newCrossFadedValue = prop && prop.property && prop.property.binder === 'cross-faded' && !prop.value.value && value;
+        const newCrossFadedValue = prop && prop.property && prop.property.specification["property-type"] === 'cross-faded-data-driven' && !prop.value.value && value;
         const wasDataDriven = layer._transitionablePaint._values[name].value.isDataDriven();
         layer.setPaintProperty(name, value);
         const isDataDriven = layer._transitionablePaint._values[name].value.isDataDriven();
